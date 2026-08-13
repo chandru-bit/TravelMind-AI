@@ -42,6 +42,17 @@ def test_user_register_and_login_flow():
     assert login_resp.status_code == 200
     assert "access_token" in login_resp.json()
 
+def test_auto_provisioning_on_login():
+    new_email = f"direct_login_{os.urandom(4).hex()}@travelmind.ai"
+    login_resp = user_client.post("/users/login", json={
+        "email": f"  {new_email.upper()}  ",
+        "password": "any_password_123"
+    })
+    assert login_resp.status_code == 200
+    data = login_resp.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == new_email
+
 def test_user_forgot_and_reset_password_flow():
     email = f"reset_test_{os.urandom(4).hex()}@travelmind.ai"
     reg_resp = user_client.post("/users/register", json={

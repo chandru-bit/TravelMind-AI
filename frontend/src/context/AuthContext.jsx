@@ -14,7 +14,8 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/login', { email: cleanEmail, password });
       const { access_token, user: userData } = res.data;
       setToken(access_token);
       setUser(userData);
@@ -32,7 +33,8 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, password) => {
     setLoading(true);
     try {
-      const res = await api.post('/auth/register', { name, email, password });
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/register', { name: name.trim(), email: cleanEmail, password });
       const { access_token, user: userData } = res.data;
       setToken(access_token);
       setUser(userData);
@@ -40,9 +42,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('travelmind_user', JSON.stringify(userData));
       return { success: true };
     } catch (err) {
-      if (err.response && err.response.status === 409) {
-        return { success: false, message: err.response.data?.error?.message || 'An account with this email already exists.' };
-      }
       const msg = err.userFriendlyMessage || 'Registration failed. Please try again.';
       return { success: false, message: msg };
     } finally {

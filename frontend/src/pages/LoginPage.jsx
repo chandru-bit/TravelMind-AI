@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Compass, AlertCircle, ArrowRight, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { Compass, AlertCircle, ArrowRight, Lock, Mail, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 export const LoginPage = () => {
   const { login } = useAuth();
@@ -16,7 +16,22 @@ export const LoginPage = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const res = await login(email, password);
+    const res = await login(email.trim(), password);
+    setLoading(false);
+
+    if (res.success) {
+      navigate('/dashboard');
+    } else {
+      setError(res.message);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setError('');
+    setEmail('demo@travelmind.ai');
+    setPassword('password123');
+    setLoading(true);
+    const res = await login('demo@travelmind.ai', 'password123');
     setLoading(false);
 
     if (res.success) {
@@ -33,8 +48,25 @@ export const LoginPage = () => {
           <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto mb-3 border border-cyan-500/30">
             <Compass className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-extrabold text-white">Welcome Back</h2>
-          <p className="text-xs text-gray-400">Sign in to your TravelMind AI account</p>
+          <h2 className="text-2xl font-extrabold text-white">Welcome to TravelMind</h2>
+          <p className="text-xs text-gray-400">Sign in with any email address to access your travel dashboard</p>
+        </div>
+
+        {/* 1-Click Instant Demo Access */}
+        <button
+          type="button"
+          onClick={handleDemoLogin}
+          disabled={loading}
+          className="w-full py-3 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+        >
+          <Sparkles className="w-4 h-4 text-emerald-400" />
+          1-Click Instant Demo Login (demo@travelmind.ai)
+        </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-800" />
+          <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Or Login with Email</span>
+          <div className="flex-1 h-px bg-gray-800" />
         </div>
 
         {error && (
@@ -54,7 +86,7 @@ export const LoginPage = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="alex@example.com"
+                placeholder="you@example.com"
                 className="w-full bg-gray-900/80 border border-gray-700 focus:border-cyan-500 rounded-xl pl-9 pr-4 py-3 text-sm text-white focus:outline-none transition-colors"
               />
             </div>
