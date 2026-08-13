@@ -11,6 +11,7 @@ os.environ["AI_SERVICE_URL"] = "http://localhost:8004"
 os.environ["PREDICTION_SERVICE_URL"] = "http://localhost:8005"
 os.environ["NOTIFICATION_SERVICE_URL"] = "http://localhost:8006"
 os.environ["DATABASE_URL"] = "sqlite:///./travelmind.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 os.environ["DEMO_MODE"] = "false"
 
 root_dir = os.path.abspath(os.path.dirname(__file__))
