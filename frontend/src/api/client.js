@@ -42,6 +42,13 @@ api.interceptors.response.use(
 
       if (apiErr && typeof apiErr.message === 'string') {
         errorMessage = apiErr.message;
+        if (Array.isArray(apiErr.details) && apiErr.details.length > 0) {
+          const firstDetail = apiErr.details[0];
+          if (typeof firstDetail?.msg === 'string') {
+            const field = firstDetail.loc ? firstDetail.loc[firstDetail.loc.length - 1] : '';
+            errorMessage = `${firstDetail.msg}${field ? ` (${field})` : ''}`;
+          }
+        }
       } else if (typeof apiErr === 'string') {
         errorMessage = apiErr;
       } else if (typeof error.response.data?.message === 'string') {
