@@ -42,6 +42,40 @@ def test_user_register_and_login_flow():
     assert login_resp.status_code == 200
     assert "access_token" in login_resp.json()
 
+def test_user_forgot_and_reset_password_flow():
+    email = f"reset_test_{os.urandom(4).hex()}@travelmind.ai"
+    reg_resp = user_client.post("/users/register", json={
+        "name": "Reset Test User",
+        "email": email,
+        "password": "old_password_123"
+    })
+    assert reg_resp.status_code == 200
+
+    # Step 1: Request forgot password code
+    forgot_resp = user_client.post("/users/forgot-password", json={"email": email})
+    assert forgot_resp.status_code == 200
+    forgot_data = forgot_resp.json()
+    assert forgot_data["success"] == True
+    code = forgot_data["debug_code"]
+    assert code is not None
+
+    # Step 2: Reset password with code
+    reset_resp = user_client.post("/users/reset-password", json={
+        "email": email,
+        "code": code,
+        "new_password": "new_secure_password_456"
+    })
+    assert reset_resp.status_code == 200
+    assert reset_resp.json()["success"] == True
+
+    # Step 3: Verify login with new password
+    login_new_resp = user_client.post("/users/login", json={
+        "email": email,
+        "password": "new_secure_password_456"
+    })
+    assert login_new_resp.status_code == 200
+    assert "access_token" in login_new_resp.json()
+
 def test_recommendation_flow():
     resp = rec_client.post("/recommendations", json={
         "budget": 25000,

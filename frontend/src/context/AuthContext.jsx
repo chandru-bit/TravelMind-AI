@@ -57,8 +57,34 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('travelmind_user');
   };
 
+  const requestPasswordResetCode = async (email) => {
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/forgot-password', { email });
+      return { success: true, message: res.data?.message, debug_code: res.data?.debug_code };
+    } catch (err) {
+      const msg = err.userFriendlyMessage || 'Failed to send reset code. Please check your email.';
+      return { success: false, message: msg };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (email, code, newPassword) => {
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/reset-password', { email, code, new_password: newPassword });
+      return { success: true, message: res.data?.message };
+    } catch (err) {
+      const msg = err.userFriendlyMessage || 'Password reset failed. Please verify your code and try again.';
+      return { success: false, message: msg };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, setUser, requestPasswordResetCode, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
