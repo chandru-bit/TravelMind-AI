@@ -29,7 +29,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Centralized Error Toast/Message Formatting
+// Response Interceptor: Centralized Error Formatting
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -38,22 +38,25 @@ api.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       const apiErr = error.response.data?.error;
+      const detail = error.response.data?.detail;
 
-      if (apiErr && apiErr.message) {
+      if (apiErr && typeof apiErr.message === 'string') {
         errorMessage = apiErr.message;
+      } else if (typeof detail === 'string') {
+        errorMessage = detail;
+      } else if (Array.isArray(detail) && detail.length > 0 && detail[0].msg) {
+        errorMessage = detail[0].msg;
       } else if (status === 401) {
-        errorMessage = 'Your session has expired. Please log in again.';
-        localStorage.removeItem('travelmind_token');
-        localStorage.removeItem('travelmind_user');
+        errorMessage = 'Invalid email or password. Please check your credentials.';
       } else if (status === 404) {
-        errorMessage = 'The requested travel information was not found.';
+        errorMessage = 'The requested endpoint or resource was not found.';
       } else if (status === 429) {
         errorMessage = 'Too many requests. Please wait a moment before trying again.';
       } else if (status >= 500) {
-        errorMessage = 'Server temporary error. Demo fallback mode active.';
+        errorMessage = 'Server temporary error. Please try again later.';
       }
     } else if (error.request) {
-      errorMessage = 'Unable to connect to TravelMind AI. Please check network connection.';
+      errorMessage = 'Unable to connect to TravelMind AI server. Please check your network connection.';
     }
 
     error.userFriendlyMessage = errorMessage;

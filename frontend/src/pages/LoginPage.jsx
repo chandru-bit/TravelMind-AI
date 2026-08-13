@@ -83,10 +83,6 @@ export const LoginPage = () => {
           </button>
         </form>
 
-        <div className="pt-4 border-t border-gray-800/80 text-center text-xs text-gray-400">
-          Demo login credential: <code className="text-cyan-400">demo@travelmind.ai</code> / <code className="text-cyan-400">password123</code>
-        </div>
-
         <div className="text-center text-xs text-gray-400">
           Don't have an account?{' '}
           <Link to="/register" className="text-cyan-400 font-semibold hover:underline">

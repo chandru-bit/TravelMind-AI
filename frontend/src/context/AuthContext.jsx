@@ -22,7 +22,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('travelmind_user', JSON.stringify(userData));
       return { success: true };
     } catch (err) {
-      return { success: false, message: err.userFriendlyMessage || 'Login failed.' };
+      const msg = err.userFriendlyMessage || 'Login failed. Please check your credentials.';
+      return { success: false, message: msg };
     } finally {
       setLoading(false);
     }
@@ -39,7 +40,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('travelmind_user', JSON.stringify(userData));
       return { success: true };
     } catch (err) {
-      return { success: false, message: err.userFriendlyMessage || 'Registration failed.' };
+      if (err.response && err.response.status === 409) {
+        return { success: false, message: err.response.data?.error?.message || 'An account with this email already exists.' };
+      }
+      const msg = err.userFriendlyMessage || 'Registration failed. Please try again.';
+      return { success: false, message: msg };
     } finally {
       setLoading(false);
     }

@@ -52,8 +52,7 @@ export const DashboardPage = () => {
           temperature_celsius: 28.5,
           condition: 'Sunny & Tropical',
           humidity_percent: 68,
-          wind_speed_kmh: 14.0,
-          is_demo_data: true
+          wind_speed_kmh: 14.0
         });
 
         // 4. Fetch User Trips
