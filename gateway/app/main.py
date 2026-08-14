@@ -164,6 +164,9 @@ async def gateway_proxy(path: str, request: Request):
     elif full_path.startswith("/api/trips"):
         matched_url = TRIP_SERVICE_URL
         target_service_path = full_path.replace("/api", "")
+    elif full_path.startswith("/api/bookings") or full_path.startswith("/api/invoices"):
+        matched_url = TRIP_SERVICE_URL
+        target_service_path = full_path.replace("/api", "")
     elif full_path.startswith("/api/recommendations"):
         matched_url = RECOMMENDATION_SERVICE_URL
         target_service_path = full_path.replace("/api", "")

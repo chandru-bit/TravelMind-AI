@@ -9,17 +9,20 @@ from typing import List, Optional
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 from shared.database.connection import get_db, Base, engine
-from database.models import Trip, Itinerary, ItineraryItem, generate_uuid
+from database.models import Trip, Itinerary, ItineraryItem, Booking, Invoice, Payment, User, generate_uuid
 from shared.schemas.models import (
-    TripCreateRequest, TripResponse, ItineraryResponse, ItineraryItemSchema
+    TripCreateRequest, TripResponse, ItineraryResponse, ItineraryItemSchema,
+    InvoiceDetailSchema, InvoiceResponse, DemoPaymentRequest, PaymentResponse, BillingSummaryResponse
 )
 from shared.auth.jwt import decode_access_token
 from shared.errors.handlers import (
     api_exception_handler, http_exception_handler, validation_exception_handler,
     generic_exception_handler, APIException
 )
+from shared.utils.pdf_generator import generate_invoice_pdf
 import uuid
-from fastapi import Request
+from datetime import datetime
+from fastapi import Request, Response
 from shared.logging.structured import get_logger, request_id_ctx
 from fastapi.exceptions import RequestValidationError
 
@@ -336,6 +339,368 @@ def delete_trip(trip_id: str, user_id: str = Depends(get_current_user_id), db: S
         raise APIException("NOT_FOUND", "Trip not found.", 404)
     TripRepository.delete_trip(db, trip)
     return {"success": True, "message": "Trip successfully deleted."}
+
+# ==================== BILLING MODULE HELPERS & ROUTES ====================
+def calculate_bill_data(room_price: float, nights: int, rooms: int, service_fee: float = 300.0, discount: float = 500.0) -> dict:
+    """Calculates bill components mathematically:
+    Room Cost = Room Price * Nights * Rooms
+    Subtotal = Room Cost
+    Tax = 18% of Subtotal
+    Final Total = Subtotal + Tax + Service Fee - Discount
+    """
+    if room_price <= 0:
+        raise APIException("BAD_REQUEST", "Room price must be a positive number.", 400)
+    if nights <= 0:
+        raise APIException("BAD_REQUEST", "Number of nights must be greater than zero.", 400)
+    if rooms <= 0:
+        raise APIException("BAD_REQUEST", "Number of rooms must be greater than zero.", 400)
+    if service_fee < 0:
+        raise APIException("BAD_REQUEST", "Service fee cannot be negative.", 400)
+    if discount < 0:
+        raise APIException("BAD_REQUEST", "Discount cannot be negative.", 400)
+
+    room_cost = round(room_price * nights * rooms, 2)
+    subtotal = room_cost
+    tax = round(subtotal * 0.18, 2)
+    total_amount = round(subtotal + tax + service_fee - discount, 2)
+
+    if total_amount < 0:
+        raise APIException("BAD_REQUEST", "Final amount calculation resulted in a negative total.", 400)
+
+    return {
+        "room_cost": room_cost,
+        "subtotal": subtotal,
+        "tax": tax,
+        "service_fee": service_fee,
+        "discount": discount,
+        "total_amount": total_amount
+    }
+
+def generate_unique_invoice_number(db: Session) -> str:
+    """Generates unique invoice number TMAI-INV-2026-000001 avoiding duplicates."""
+    count = db.query(Invoice).count() + 1
+    seq = f"{count:06d}"
+    candidate = f"TMAI-INV-2026-{seq}"
+    while db.query(Invoice).filter(Invoice.invoice_number == candidate).first():
+        count += 1
+        seq = f"{count:06d}"
+        candidate = f"TMAI-INV-2026-{seq}"
+    return candidate
+
+def build_invoice_detail_schema(invoice: Invoice, db: Session) -> InvoiceDetailSchema:
+    booking = db.query(Booking).filter(Booking.id == invoice.booking_id).first()
+    latest_payment = db.query(Payment).filter(Payment.invoice_id == invoice.id).order_by(Payment.created_at.desc()).first()
+    pay_status = latest_payment.payment_status if latest_payment else "Pending"
+
+    guest_name = "Customer"
+    guest_email = "guest@travelmind.ai"
+    if booking:
+        guest_name = booking.guest_name or "Customer"
+        guest_email = booking.guest_email or "guest@travelmind.ai"
+
+    user_rec = db.query(User).filter(User.id == invoice.user_id).first()
+    if user_rec:
+        if user_rec.name and guest_name == "Customer":
+            guest_name = user_rec.name
+        if user_rec.email and guest_email == "guest@travelmind.ai":
+            guest_email = user_rec.email
+
+    return InvoiceDetailSchema(
+        id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        booking_id=booking.id if booking else invoice.booking_id,
+        booking_reference=booking.booking_reference if (booking and booking.booking_reference) else f"TMAI-2026-{(booking.id[:6] if booking else '000123').upper()}",
+        hotel_name=booking.hotel_name if booking else "Ocean Pearl Resort",
+        room_type=booking.room_type if booking else "Deluxe Room",
+        guest_name=guest_name,
+        guest_email=guest_email,
+        guest_phone=booking.guest_phone if booking else "+91 98765 43210",
+        check_in=booking.check_in if booking else "2026-08-20",
+        check_out=booking.check_out if booking else "2026-08-23",
+        nights=booking.nights if booking else 3,
+        rooms=booking.rooms if booking else 1,
+        room_price=booking.room_price if booking else 3500.0,
+        subtotal=invoice.subtotal,
+        tax=invoice.tax,
+        service_fee=invoice.service_fee,
+        discount=invoice.discount,
+        total_amount=invoice.total_amount,
+        currency=invoice.currency or "INR",
+        payment_status=pay_status,
+        invoice_status=invoice.invoice_status or "Generated",
+        created_at=invoice.created_at.strftime("%Y-%m-%d %H:%M") if invoice.created_at else None
+    )
+
+def ensure_default_booking(db: Session, user_id: str, booking_id: str) -> Booking:
+    """Helper to retrieve or auto-create demo room booking if missing."""
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        if booking_id.startswith("demo-") or booking_id == "default":
+            booking = Booking(
+                id=booking_id if booking_id != "default" else generate_uuid(),
+                user_id=user_id,
+                booking_reference=f"TMAI-2026-{uuid.uuid4().hex[:6].upper()}",
+                booking_type="Hotel",
+                provider="TravelMind AI Hospitality",
+                title="Ocean Pearl Resort",
+                price=3500.0,
+                status="Confirmed",
+                hotel_name="Ocean Pearl Resort",
+                room_type="Deluxe Room",
+                guest_name="Customer",
+                guest_email="guest@travelmind.ai",
+                guest_phone="+91 98765 43210",
+                check_in="2026-08-20",
+                check_out="2026-08-23",
+                nights=3,
+                rooms=1,
+                room_price=3500.0
+            )
+            db.add(booking)
+            db.commit()
+            db.refresh(booking)
+    return booking
+
+@app.post("/bookings/{booking_id}/billing", response_model=InvoiceResponse)
+@app.post("/api/bookings/{booking_id}/billing", response_model=InvoiceResponse)
+def create_booking_billing(booking_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    booking = ensure_default_booking(db, user_id, booking_id)
+    if not booking:
+        raise APIException("NOT_FOUND", "Booking not found.", 404)
+
+    if booking.user_id and booking.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    existing_inv = db.query(Invoice).filter(Invoice.booking_id == booking.id).first()
+    if existing_inv:
+        return InvoiceResponse(success=True, invoice=build_invoice_detail_schema(existing_inv, db))
+
+    calc = calculate_bill_data(
+        room_price=booking.room_price or 3500.0,
+        nights=booking.nights or 3,
+        rooms=booking.rooms or 1
+    )
+
+    try:
+        inv_num = generate_unique_invoice_number(db)
+        invoice = Invoice(
+            invoice_number=inv_num,
+            booking_id=booking.id,
+            user_id=user_id,
+            subtotal=calc["subtotal"],
+            tax=calc["tax"],
+            service_fee=calc["service_fee"],
+            discount=calc["discount"],
+            total_amount=calc["total_amount"],
+            currency="INR",
+            invoice_status="Generated"
+        )
+        db.add(invoice)
+        db.flush()
+
+        payment = Payment(
+            invoice_id=invoice.id,
+            booking_id=booking.id,
+            payment_reference=f"DEMO-PAY-2026-{uuid.uuid4().hex[:8].upper()}",
+            amount=calc["total_amount"],
+            payment_method="DEMO_PAYMENT",
+            payment_status="Pending"
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(invoice)
+    except APIException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Error generating invoice transaction: {exc}")
+        raise APIException("INTERNAL_SERVER_ERROR", "Unable to generate the invoice. Please try again.", 500)
+
+    return InvoiceResponse(success=True, invoice=build_invoice_detail_schema(invoice, db))
+
+@app.get("/bookings/{booking_id}/billing")
+@app.get("/api/bookings/{booking_id}/billing")
+def get_booking_billing_preview(booking_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    booking = ensure_default_booking(db, user_id, booking_id)
+    if not booking:
+        raise APIException("NOT_FOUND", "Booking not found.", 404)
+
+    if booking.user_id and booking.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    calc = calculate_bill_data(
+        room_price=booking.room_price or 3500.0,
+        nights=booking.nights or 3,
+        rooms=booking.rooms or 1
+    )
+    return {
+        "success": True,
+        "booking_id": booking.id,
+        "hotel_name": booking.hotel_name,
+        "room_type": booking.room_type,
+        "nights": booking.nights,
+        "rooms": booking.rooms,
+        "room_price": booking.room_price,
+        "calculation": calc
+    }
+
+@app.get("/bookings/{booking_id}/invoice", response_model=InvoiceResponse)
+@app.get("/api/bookings/{booking_id}/invoice", response_model=InvoiceResponse)
+def get_invoice_by_booking(booking_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    booking = ensure_default_booking(db, user_id, booking_id)
+    if not booking:
+        raise APIException("NOT_FOUND", "Booking not found.", 404)
+
+    if booking.user_id and booking.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    invoice = db.query(Invoice).filter(Invoice.booking_id == booking.id).first()
+    if not invoice:
+        return create_booking_billing(booking_id, user_id, db)
+
+    return InvoiceResponse(success=True, invoice=build_invoice_detail_schema(invoice, db))
+
+@app.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
+@app.get("/api/invoices/{invoice_id}", response_model=InvoiceResponse)
+def get_invoice_by_id(invoice_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        # Search by invoice_number if invoice_id is number
+        invoice = db.query(Invoice).filter(Invoice.invoice_number == invoice_id).first()
+    if not invoice:
+        raise APIException("NOT_FOUND", "Invoice not found.", 404)
+
+    if invoice.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    return InvoiceResponse(success=True, invoice=build_invoice_detail_schema(invoice, db))
+
+@app.get("/invoices/{invoice_id}/download")
+@app.get("/api/invoices/{invoice_id}/download")
+def download_invoice_pdf(invoice_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        invoice = db.query(Invoice).filter(Invoice.invoice_number == invoice_id).first()
+    if not invoice:
+        raise APIException("NOT_FOUND", "Invoice not found.", 404)
+
+    if invoice.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    inv_schema = build_invoice_detail_schema(invoice, db)
+    pdf_bytes = generate_invoice_pdf(inv_schema.model_dump())
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="invoice-{invoice.invoice_number}.pdf"'
+        }
+    )
+
+@app.post("/invoices/{invoice_id}/payment/demo", response_model=PaymentResponse)
+@app.post("/api/invoices/{invoice_id}/payment/demo", response_model=PaymentResponse)
+def process_demo_payment(invoice_id: str, req: DemoPaymentRequest = DemoPaymentRequest(), user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        invoice = db.query(Invoice).filter(Invoice.invoice_number == invoice_id).first()
+    if not invoice:
+        raise APIException("NOT_FOUND", "Invoice not found.", 404)
+
+    if invoice.user_id != user_id:
+        raise APIException("FORBIDDEN", "You are not authorized to access this invoice.", 403)
+
+    payment = db.query(Payment).filter(Payment.invoice_id == invoice.id).order_by(Payment.created_at.desc()).first()
+    if not payment:
+        payment = Payment(
+            invoice_id=invoice.id,
+            booking_id=invoice.booking_id,
+            payment_reference=f"DEMO-PAY-2026-{uuid.uuid4().hex[:8].upper()}",
+            amount=invoice.total_amount,
+            payment_method="DEMO_PAYMENT",
+            payment_status="Pending"
+        )
+        db.add(payment)
+        db.flush()
+
+    if req.simulate_failure:
+        payment.payment_status = "Failed"
+        payment.paid_at = None
+        db.commit()
+        inv_schema = build_invoice_detail_schema(invoice, db)
+        return PaymentResponse(
+            success=False,
+            payment_status="Failed",
+            payment_reference=payment.payment_reference,
+            message="Demo payment failed. Please try again.",
+            invoice=inv_schema
+        )
+    else:
+        payment.payment_status = "Paid"
+        payment.paid_at = datetime.utcnow()
+        db.commit()
+        inv_schema = build_invoice_detail_schema(invoice, db)
+        return PaymentResponse(
+            success=True,
+            payment_status="Paid",
+            payment_reference=payment.payment_reference,
+            message="Demo payment successful. No real money was charged.",
+            invoice=inv_schema
+        )
+
+@app.get("/users/me/billing-summary", response_model=BillingSummaryResponse)
+@app.get("/api/users/me/billing-summary", response_model=BillingSummaryResponse)
+def get_user_billing_summary(user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    user_invoices = db.query(Invoice).filter(Invoice.user_id == user_id).all()
+    user_bookings = db.query(Booking).filter(Booking.user_id == user_id).all()
+
+    total_bookings = max(len(user_bookings), len(user_invoices), 1)
+    total_spending = sum(inv.total_amount for inv in user_invoices) if user_invoices else 12190.0
+    
+    paid_count = 0
+    pending_count = 0
+    for inv in user_invoices:
+        pmt = db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.created_at.desc()).first()
+        if pmt and pmt.payment_status == "Paid":
+            paid_count += 1
+        else:
+            pending_count += 1
+
+    return BillingSummaryResponse(
+        total_bookings=total_bookings,
+        total_spending=round(total_spending, 2),
+        pending_payments=pending_count,
+        paid_bookings=paid_count
+    )
+
+@app.get("/users/me/bookings")
+@app.get("/api/users/me/bookings")
+def get_user_room_bookings(user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    bookings = db.query(Booking).filter(Booking.user_id == user_id).all()
+    if not bookings:
+        # Create default demo booking if none exists
+        ensure_default_booking(db, user_id, f"demo-booking-{user_id[:8]}")
+        bookings = db.query(Booking).filter(Booking.user_id == user_id).all()
+
+    results = []
+    for b in bookings:
+        inv = db.query(Invoice).filter(Invoice.booking_id == b.id).first()
+        inv_data = build_invoice_detail_schema(inv, db) if inv else None
+        results.append({
+            "id": b.id,
+            "booking_reference": b.booking_reference or f"TMAI-2026-{b.id[:6].upper()}",
+            "hotel_name": b.hotel_name,
+            "room_type": b.room_type,
+            "check_in": b.check_in,
+            "check_out": b.check_out,
+            "nights": b.nights,
+            "rooms": b.rooms,
+            "price": b.price,
+            "status": b.status,
+            "invoice": inv_data
+        })
+    return results
 
 if __name__ == "__main__":
     import uvicorn

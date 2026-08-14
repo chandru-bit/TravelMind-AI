@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api from '../api/client';
-import { Compass, Sparkles, TrendingUp, Calendar, MapPin, Wallet, ArrowRight, CloudSun, Award } from 'lucide-react';
+import api, { billingApi } from '../api/client';
+import { Compass, Sparkles, TrendingUp, Calendar, MapPin, Wallet, ArrowRight, CloudSun, Award, FileText, CreditCard } from 'lucide-react';
 import { RecommendationCard } from '../components/RecommendationCard';
 import { PricePredictionCard } from '../components/PricePredictionCard';
 import { WeatherCard } from '../components/WeatherCard';
@@ -16,6 +16,7 @@ export const DashboardPage = () => {
   const [prediction, setPrediction] = useState(null);
   const [weather, setWeather] = useState(null);
   const [trips, setTrips] = useState([]);
+  const [billingSummary, setBillingSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,6 +60,12 @@ export const DashboardPage = () => {
         const tripRes = await api.get('/trips').catch(() => null);
         if (tripRes && Array.isArray(tripRes.data)) {
           setTrips(tripRes.data);
+        }
+
+        // 5. Fetch Billing Summary
+        const summaryRes = await billingApi.getBillingSummary().catch(() => null);
+        if (summaryRes && summaryRes.data) {
+          setBillingSummary(summaryRes.data);
         }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
@@ -155,6 +162,40 @@ export const DashboardPage = () => {
           <div className="space-y-6">
             {prediction && <PricePredictionCard prediction={prediction} />}
             <WeatherCard weather={weather} />
+
+            {/* Billing Summary Card */}
+            <div className="glass-panel rounded-2xl p-6 border border-gray-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-cyan-400" /> Billing Summary
+                </h4>
+                <Link to="/billing" className="text-xs text-cyan-400 font-semibold hover:underline flex items-center gap-1">
+                  View Invoices <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Total Bookings</span>
+                  <span className="text-lg font-black text-white">{billingSummary?.total_bookings || 1}</span>
+                </div>
+
+                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Total Spending</span>
+                  <span className="text-lg font-black text-cyan-400">₹{billingSummary?.total_spending ? billingSummary.total_spending.toLocaleString() : '12,190'}</span>
+                </div>
+
+                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Pending</span>
+                  <span className="text-lg font-black text-amber-400">{billingSummary?.pending_payments || 1}</span>
+                </div>
+
+                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Paid</span>
+                  <span className="text-lg font-black text-emerald-400">{billingSummary?.paid_bookings || 0}</span>
+                </div>
+              </div>
+            </div>
 
             {/* Recent Activity / Feedback Card */}
             <div className="glass-panel rounded-2xl p-6 border border-gray-800 space-y-3">

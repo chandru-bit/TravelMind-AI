@@ -83,4 +83,17 @@ api.interceptors.response.use(
   }
 );
 
+export const billingApi = {
+  getInvoice: (invoiceId) => api.get(`/invoices/${invoiceId}`),
+  getInvoiceByBooking: (bookingId) => api.get(`/bookings/${bookingId}/invoice`),
+  createBilling: (bookingId) => api.post(`/bookings/${bookingId}/billing`),
+  getBillingPreview: (bookingId) => api.get(`/bookings/${bookingId}/billing`),
+  processDemoPayment: (invoiceId, simulateFailure = false) =>
+    api.post(`/invoices/${invoiceId}/payment/demo`, { simulate_failure: simulateFailure }),
+  downloadInvoicePdf: (invoiceId) =>
+    api.get(`/invoices/${invoiceId}/download`, { responseType: 'blob' }),
+  getBillingSummary: () => api.get('/users/me/billing-summary'),
+  getUserBookings: () => api.get('/users/me/bookings'),
+};
+
 export default api;

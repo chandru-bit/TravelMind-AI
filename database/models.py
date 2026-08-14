@@ -195,12 +195,71 @@ class Booking(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     trip_id = Column(String(36), ForeignKey("trips.id"), nullable=True)
-    booking_type = Column(String(50), nullable=False)  # Flight, Hotel, Activity, Transport
-    provider = Column(String(100), nullable=False)
-    title = Column(String(150), nullable=False)
-    price = Column(Float, nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    booking_reference = Column(String(50), unique=True, nullable=True, index=True)
+    booking_type = Column(String(50), nullable=False, default="Hotel")  # Flight, Hotel, Activity, Transport
+    provider = Column(String(100), nullable=False, default="TravelMind AI Hospitality")
+    title = Column(String(150), nullable=False, default="Ocean Pearl Resort")
+    price = Column(Float, nullable=False, default=3500.0)
     booking_url = Column(String(255), default="#")
-    status = Column(String(50), default="Recommended")
+    status = Column(String(50), default="Confirmed")
+
+    # Hotel / Room Booking attributes
+    hotel_name = Column(String(150), default="Ocean Pearl Resort")
+    room_type = Column(String(100), default="Deluxe Room")
+    guest_name = Column(String(100), default="Customer")
+    guest_email = Column(String(150), default="guest@travelmind.ai")
+    guest_phone = Column(String(50), default="+91 98765 43210")
+    check_in = Column(String(20), default="2026-08-20")
+    check_out = Column(String(20), default="2026-08-23")
+    nights = Column(Integer, default=3)
+    rooms = Column(Integer, default=1)
+    room_price = Column(Float, default=3500.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", backref="bookings")
+    trip = relationship("Trip", backref="bookings")
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    invoice_number = Column(String(50), unique=True, nullable=False, index=True)
+    booking_id = Column(String(36), ForeignKey("bookings.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    subtotal = Column(Float, nullable=False)
+    tax = Column(Float, nullable=False)
+    service_fee = Column(Float, nullable=False)
+    discount = Column(Float, nullable=False)
+    total_amount = Column(Float, nullable=False)
+    currency = Column(String(10), default="INR")
+    invoice_status = Column(String(50), default="Generated")  # Generated, Void, Cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    booking = relationship("Booking", backref="invoices")
+    user = relationship("User", backref="invoices")
+    payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    invoice_id = Column(String(36), ForeignKey("invoices.id"), nullable=False, index=True)
+    booking_id = Column(String(36), ForeignKey("bookings.id"), nullable=False, index=True)
+    payment_reference = Column(String(100), unique=True, nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    payment_method = Column(String(50), default="DEMO_PAYMENT")
+    payment_status = Column(String(50), default="Pending")  # Pending, Paid, Failed, Refunded
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    invoice = relationship("Invoice", back_populates="payments")
+    booking = relationship("Booking", backref="payments")
 
 
 class Feedback(Base):

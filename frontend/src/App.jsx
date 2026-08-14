@@ -16,6 +16,7 @@ import { RecommendationsPage } from './pages/RecommendationsPage';
 import { PricePredictionPage } from './pages/PricePredictionPage';
 import { SavedTripsPage } from './pages/SavedTripsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { BillingPage } from './pages/BillingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 const ProtectedRoute = ({ children }) => {
@@ -46,7 +47,12 @@ export function App() {
               <Route path="/recommendations" element={<RecommendationsPage />} />
               <Route path="/predictions" element={<ProtectedRoute><PricePredictionPage /></ProtectedRoute>} />
               <Route path="/saved-trips" element={<ProtectedRoute><SavedTripsPage /></ProtectedRoute>} />
+              <Route path="/trips" element={<ProtectedRoute><SavedTripsPage /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              
+              <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+              <Route path="/billing/:invoiceId" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+              <Route path="/billing/booking/:bookingId" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

@@ -304,6 +304,63 @@ def seed_database():
                 type="recommendation"
             )
             db.add(notif)
+            db.flush()
+
+            # Seed Demo Booking, Invoice, and Payment
+            from database.models import Booking, Invoice, Payment
+            demo_booking = Booking(
+                id="demo-booking-001",
+                trip_id=sample_trip.id,
+                user_id=demo_user.id,
+                booking_reference="TMAI-2026-000123",
+                booking_type="Hotel",
+                provider="Ocean Pearl Resort Hospitality",
+                title="Ocean Pearl Resort - Deluxe Room",
+                price=3500.0,
+                status="Confirmed",
+                hotel_name="Ocean Pearl Resort",
+                room_type="Deluxe Room",
+                guest_name="Demo Explorer",
+                guest_email="demo@travelmind.ai",
+                guest_phone="+91 98765 43210",
+                check_in="2026-08-20",
+                check_out="2026-08-23",
+                nights=3,
+                rooms=1,
+                room_price=3500.0
+            )
+            db.add(demo_booking)
+            db.flush()
+
+            # Room Cost = 3500 * 3 * 1 = 10500
+            # Subtotal = 10500, Tax (18%) = 1890, Service Fee = 300, Discount = 500
+            # Total = 10500 + 1890 + 300 - 500 = 12190
+            demo_invoice = Invoice(
+                id="demo-invoice-001",
+                invoice_number="TMAI-INV-2026-000001",
+                booking_id=demo_booking.id,
+                user_id=demo_user.id,
+                subtotal=10500.0,
+                tax=1890.0,
+                service_fee=300.0,
+                discount=500.0,
+                total_amount=12190.0,
+                currency="INR",
+                invoice_status="Generated"
+            )
+            db.add(demo_invoice)
+            db.flush()
+
+            demo_payment = Payment(
+                id="demo-payment-001",
+                invoice_id=demo_invoice.id,
+                booking_id=demo_booking.id,
+                payment_reference="DEMO-PAY-2026-000001",
+                amount=12190.0,
+                payment_method="DEMO_PAYMENT",
+                payment_status="Pending"
+            )
+            db.add(demo_payment)
             db.commit()
 
         print("Database successfully seeded with 15 realistic destinations, weather data, and ML training dataset!")

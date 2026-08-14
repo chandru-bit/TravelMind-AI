@@ -196,3 +196,51 @@ class NotificationResponse(BaseModel):
     type: str  # "price_alert", "trip_reminder", "recommendation"
     is_read: bool = False
     created_at: Optional[datetime] = None
+
+
+# ==================== BILLING & INVOICE SCHEMAS ====================
+class InvoiceDetailSchema(BaseModel):
+    id: Optional[str] = None
+    invoice_number: str
+    booking_id: Optional[str] = None
+    booking_reference: str
+    hotel_name: str
+    room_type: str
+    guest_name: str
+    guest_email: Optional[str] = "guest@travelmind.ai"
+    guest_phone: Optional[str] = "+91 98765 43210"
+    check_in: str
+    check_out: str
+    nights: int
+    rooms: int
+    room_price: float
+    subtotal: float
+    tax: float
+    service_fee: float
+    discount: float
+    total_amount: float
+    currency: str = "INR"
+    payment_status: str = "Pending"  # Pending, Paid, Failed, Refunded
+    invoice_status: str = "Generated"
+    created_at: Optional[str] = None
+
+class InvoiceResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    invoice: InvoiceDetailSchema
+
+class DemoPaymentRequest(BaseModel):
+    simulate_failure: bool = False
+
+class PaymentResponse(BaseModel):
+    success: bool
+    payment_status: str
+    payment_reference: str
+    message: str
+    invoice: InvoiceDetailSchema
+
+class BillingSummaryResponse(BaseModel):
+    total_bookings: int
+    total_spending: float
+    pending_payments: int
+    paid_bookings: int

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/client';
-import { Calendar, MapPin, Trash2, ArrowRight, Compass } from 'lucide-react';
+import api, { billingApi } from '../api/client';
+import { Calendar, MapPin, Trash2, ArrowRight, Compass, FileText, Download } from 'lucide-react';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 
 export const SavedTripsPage = () => {
@@ -32,6 +32,22 @@ export const SavedTripsPage = () => {
     }
   };
 
+  const handleDownloadInvoice = async (tripId) => {
+    try {
+      const res = await billingApi.downloadInvoicePdf(tripId);
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${tripId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Download failed:", err);
+      navigate(`/billing/booking/${tripId}`);
+    }
+  };
+
   useEffect(() => {
     fetchTrips();
   }, []);
@@ -40,8 +56,8 @@ export const SavedTripsPage = () => {
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-white">Your Saved Trips</h1>
-          <p className="text-sm text-gray-400">View and manage your saved itineraries & travel plans</p>
+          <h1 className="text-3xl font-extrabold text-white">Your Saved Trips & Bookings</h1>
+          <p className="text-sm text-gray-400">View itineraries, room bookings, invoices, and billing history</p>
         </div>
         <button
           onClick={() => navigate('/plan')}
@@ -84,12 +100,17 @@ export const SavedTripsPage = () => {
                 <p className="text-xs text-gray-400 mt-1">
                   Dates: {trip.start_date} to {trip.end_date}
                 </p>
-                <div className="mt-3 text-sm font-extrabold text-emerald-400">
-                  Budget: ₹{trip.budget ? trip.budget.toLocaleString() : '25,000'}
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-sm font-extrabold text-emerald-400">
+                    Budget: ₹{trip.budget ? trip.budget.toLocaleString() : '25,000'}
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                    Invoice Ready
+                  </span>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
+              <div className="pt-4 border-t border-gray-800 flex items-center justify-between gap-2">
                 <button
                   onClick={() => handleDelete(trip.id)}
                   className="p-2 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-500/10"
@@ -98,12 +119,23 @@ export const SavedTripsPage = () => {
                   <Trash2 className="w-4 h-4" />
                 </button>
 
-                <button
-                  onClick={() => navigate('/plan')}
-                  className="px-3.5 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-white text-xs font-semibold flex items-center gap-1"
-                >
-                  View Timeline <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/billing/booking/${trip.id}`)}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-white text-xs font-semibold flex items-center gap-1"
+                    title="View Billing & Invoice"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> View Bill
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadInvoice(trip.id)}
+                    className="p-2 rounded-lg bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700"
+                    title="Download PDF Invoice"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
