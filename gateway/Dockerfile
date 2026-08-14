@@ -7,7 +7,7 @@ COPY shared /app/shared
 COPY database /app/database
 COPY gateway /app/gateway
 
-RUN pip install --no-cache-dir fastapi uvicorn httpx redis pydantic pyjwt sqlalchemy
+RUN pip install --no-cache-dir fastapi uvicorn httpx redis pydantic pyjwt sqlalchemy psycopg2-binary
 
 EXPOSE 8000
 

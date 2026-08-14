@@ -6,7 +6,7 @@ COPY shared /app/shared
 COPY database /app/database
 COPY services/user-service /app/services/user-service
 
-RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy pydantic pyjwt httpx redis
+RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy psycopg2-binary pydantic pyjwt httpx redis
 
 EXPOSE 8000
 

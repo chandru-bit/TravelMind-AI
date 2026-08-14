@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API Base URL - Proxied by Vite or direct to API Gateway
-const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_GATEWAY_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -33,7 +33,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    let errorMessage = 'Something went wrong on our server. Please try again.';
+    let errorMessage = 'TravelMind AI encountered a server error. Please try again.';
 
     if (error.response) {
       const status = error.response.status;
@@ -58,16 +58,22 @@ api.interceptors.response.use(
       } else if (Array.isArray(detail) && detail.length > 0 && detail[0].msg) {
         errorMessage = detail[0].msg;
       } else if (status === 401) {
-        errorMessage = 'Invalid email or password. Please check your credentials.';
+        errorMessage = 'Invalid email or password.';
       } else if (status === 404) {
         errorMessage = 'The requested endpoint or resource was not found.';
+      } else if (status === 422) {
+        errorMessage = 'Please check the information you entered.';
       } else if (status === 429) {
-        errorMessage = 'Too many requests. Please wait a moment before trying again.';
+        errorMessage = 'Too many login attempts. Please try again later.';
+      } else if (status === 502) {
+        errorMessage = 'Authentication service is temporarily unavailable.';
+      } else if (status === 503) {
+        errorMessage = 'Authentication service is currently unavailable.';
       } else if (status >= 500) {
-        errorMessage = 'Server temporary error. Please try again later.';
+        errorMessage = 'TravelMind AI encountered a server error. Please try again.';
       }
     } else if (error.request) {
-      errorMessage = 'Unable to connect to TravelMind AI server. Please check your network connection.';
+      errorMessage = 'Unable to connect to TravelMind AI.';
     }
 
     error.userFriendlyMessage = errorMessage;
