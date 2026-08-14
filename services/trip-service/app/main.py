@@ -433,32 +433,36 @@ def build_invoice_detail_schema(invoice: Invoice, db: Session) -> InvoiceDetailS
 
 def ensure_default_booking(db: Session, user_id: str, booking_id: str) -> Booking:
     """Helper to retrieve or auto-create demo room booking if missing."""
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = db.query(Booking).filter((Booking.id == booking_id) | (Booking.trip_id == booking_id)).first()
     if not booking:
-        if booking_id.startswith("demo-") or booking_id == "default":
-            booking = Booking(
-                id=booking_id if booking_id != "default" else generate_uuid(),
-                user_id=user_id,
-                booking_reference=f"TMAI-2026-{uuid.uuid4().hex[:6].upper()}",
-                booking_type="Hotel",
-                provider="TravelMind AI Hospitality",
-                title="Ocean Pearl Resort",
-                price=3500.0,
-                status="Confirmed",
-                hotel_name="Ocean Pearl Resort",
-                room_type="Deluxe Room",
-                guest_name="Customer",
-                guest_email="guest@travelmind.ai",
-                guest_phone="+91 98765 43210",
-                check_in="2026-08-20",
-                check_out="2026-08-23",
-                nights=3,
-                rooms=1,
-                room_price=3500.0
-            )
-            db.add(booking)
-            db.commit()
-            db.refresh(booking)
+        trip = db.query(Trip).filter(Trip.id == booking_id).first()
+        hotel_name = f"{trip.destination} Grand Resort & Spa" if trip else "Ocean Pearl Resort"
+        start_dt = trip.start_date if trip else "2026-08-20"
+        end_dt = trip.end_date if trip else "2026-08-23"
+        booking = Booking(
+            id=generate_uuid(),
+            trip_id=trip.id if trip else None,
+            user_id=user_id,
+            booking_reference=f"TMAI-2026-{uuid.uuid4().hex[:6].upper()}",
+            booking_type="Hotel",
+            provider=f"{hotel_name} Hospitality",
+            title=f"{hotel_name} - Deluxe Room",
+            price=3500.0,
+            status="Confirmed",
+            hotel_name=hotel_name,
+            room_type="Deluxe Room",
+            guest_name="Customer",
+            guest_email="guest@travelmind.ai",
+            guest_phone="+91 98765 43210",
+            check_in=start_dt,
+            check_out=end_dt,
+            nights=3,
+            rooms=1,
+            room_price=3500.0
+        )
+        db.add(booking)
+        db.commit()
+        db.refresh(booking)
     return booking
 
 @app.post("/bookings/{booking_id}/billing", response_model=InvoiceResponse)

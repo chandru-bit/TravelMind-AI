@@ -32,6 +32,8 @@ def get_db():
         db = SessionLocal()
         yield db
     except (OperationalError, DBAPIError, InterfaceError) as e:
+        import logging
+        logging.getLogger("travelmind.database").error(f"Database operational error: {e}")
         raise APIException(
             "SERVICE_UNAVAILABLE",
             "Authentication database service is currently unavailable. Please try again later.",
