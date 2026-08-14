@@ -9,7 +9,9 @@ from typing import Optional, Dict, Any
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import uuid
+from pydantic import ValidationError
 from shared.database.connection import get_db, Base, engine
 from database.models import User, UserPreference
 from shared.schemas.models import (
@@ -19,18 +21,22 @@ from shared.schemas.models import (
 from shared.auth.jwt import hash_password, verify_password, create_access_token, decode_access_token
 from shared.errors.handlers import (
     api_exception_handler, http_exception_handler, validation_exception_handler,
-    generic_exception_handler, APIException
+    pydantic_validation_exception_handler, generic_exception_handler, APIException
 )
 from shared.logging.structured import get_logger, request_id_ctx
 from fastapi.exceptions import RequestValidationError
+from fastapi import Request
 
 logger = get_logger("user-service")
 
 # In-memory store for reset codes
 reset_codes: Dict[str, Dict[str, Any]] = {}
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Create tables gracefully
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    logger.warning(f"Could not initialize DB tables at startup: {exc}")
 
 app = FastAPI(title="TravelMind AI - User Service", version="1.0.0")
 
@@ -42,9 +48,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def request_tracing_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request_id_ctx.set(req_id)
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
 app.add_exception_handler(APIException, api_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
@@ -134,6 +149,7 @@ def health_check():
     return {"status": "healthy", "service": "user-service"}
 
 @app.post("/users/register", response_model=AuthResponse)
+@app.post("/auth/register", response_model=AuthResponse)
 def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
     clean_email = req.email.strip().lower()
     existing = UserRepository.get_by_email(db, clean_email)
@@ -152,13 +168,15 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
     )
 
 @app.post("/users/login", response_model=AuthResponse)
+@app.post("/auth/login", response_model=AuthResponse)
 def login(req: UserLoginRequest, db: Session = Depends(get_db)):
     clean_email = req.email.strip().lower()
     user = UserRepository.get_by_email(db, clean_email)
     
     if not user:
         # Auto-create user account on login so anyone can log in with any email seamlessly
-        user_name = clean_email.split("@")[0].replace(".", " ").title() or "Traveler"
+        raw_name = clean_email.split("@")[0].replace(".", " ").replace("_", " ").title()
+        user_name = raw_name if len(raw_name) >= 2 else (f"{raw_name} User" if raw_name else "Traveler")
         reg_req = UserRegisterRequest(
             name=user_name,
             email=clean_email,
@@ -171,7 +189,7 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
             if clean_email == "demo@travelmind.ai" or req.password == "password123":
                 UserRepository.update_password(db, user.id, req.password)
             else:
-                raise APIException("UNAUTHORIZED", "Invalid password for this email account.", 401)
+                raise APIException("UNAUTHORIZED", "Invalid email or password.", 401)
 
     token = create_access_token({"sub": user.id, "email": user.email})
     return AuthResponse(
@@ -180,6 +198,7 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
     )
 
 @app.post("/users/forgot-password")
+@app.post("/auth/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     email_clean = req.email.lower().strip()
     user = UserRepository.get_by_email(db, email_clean)
@@ -188,7 +207,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
 
     # Generate 6-digit verification code
     code = f"{random.randint(100000, 999999)}"
-    expires_at = datetime.utcnow() + timedelta(minutes=15)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     reset_codes[email_clean] = {
         "code": code,
         "expires_at": expires_at
@@ -202,6 +221,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/users/reset-password")
+@app.post("/auth/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     email_clean = req.email.lower().strip()
     user = UserRepository.get_by_email(db, email_clean)
@@ -212,7 +232,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     if not record:
         raise APIException("BAD_REQUEST", "No password reset requested for this email or code has expired.", 400)
 
-    if datetime.utcnow() > record["expires_at"]:
+    if datetime.now(timezone.utc) > record["expires_at"]:
         reset_codes.pop(email_clean, None)
         raise APIException("BAD_REQUEST", "Verification code has expired. Please request a new code.", 400)
 

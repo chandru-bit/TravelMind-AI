@@ -58,10 +58,20 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     message = exc.detail if isinstance(exc.detail, str) else "An unexpected error occurred."
     return create_error_response(code=code, message=message, status_code=exc.status_code)
 
+from pydantic import ValidationError
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return create_error_response(
         code="VALIDATION_ERROR",
-        message="Invalid request payload or parameters.",
+        message="Please check the information you entered.",
+        status_code=422,
+        details=exc.errors()
+    )
+
+async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
+    return create_error_response(
+        code="VALIDATION_ERROR",
+        message="Please check the information you entered.",
         status_code=422,
         details=exc.errors()
     )
@@ -69,6 +79,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def generic_exception_handler(request: Request, exc: Exception):
     return create_error_response(
         code="INTERNAL_SERVER_ERROR",
-        message="Something went wrong on our server. Please try again later.",
+        message="TravelMind AI encountered a server error. Please try again.",
         status_code=500
     )
