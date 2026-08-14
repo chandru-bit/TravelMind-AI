@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('travelmind_user', JSON.stringify(userData));
       return { success: true };
     } catch (err) {
-      if (cleanEmail === 'demo@travelmind.ai' || err.response?.status === 405) {
+      if (cleanEmail === 'demo@travelmind.ai' || err.response?.status === 405 || err.response?.status === 404) {
         const demoUser = {
           id: 'demo-user-id-2026',
           name: cleanEmail.split('@')[0].replace('.', ' ').replace('_', ' ').toUpperCase() || 'Demo Traveler',
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('travelmind_user', JSON.stringify(userData));
       return { success: true };
     } catch (err) {
-      if (err.response?.status === 405) {
+      if (err.response?.status === 405 || err.response?.status === 404) {
         const demoUser = {
           id: `user-${Date.now()}`,
           name: cleanName || 'Traveler',
