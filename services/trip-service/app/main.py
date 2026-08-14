@@ -18,12 +18,17 @@ from shared.errors.handlers import (
     api_exception_handler, http_exception_handler, validation_exception_handler,
     generic_exception_handler, APIException
 )
-from shared.logging.structured import get_logger
+import uuid
+from fastapi import Request
+from shared.logging.structured import get_logger, request_id_ctx
 from fastapi.exceptions import RequestValidationError
 
 logger = get_logger("trip-service")
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    logger.warning(f"Could not initialize DB tables at startup: {exc}")
 
 app = FastAPI(title="TravelMind AI - Trip Service", version="1.0.0")
 
@@ -34,6 +39,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def request_tracing_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request_id_ctx.set(req_id)
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
 
 app.add_exception_handler(APIException, api_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)

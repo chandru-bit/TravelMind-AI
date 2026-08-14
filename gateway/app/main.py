@@ -108,13 +108,16 @@ async def proxy_request(service_base_url: str, target_path: str, request: Reques
             )
     except httpx.ConnectError:
         logger.error(f"Failed to connect to backend microservice at {target_url}")
-        raise APIException("SERVICE_UNAVAILABLE", "Backend service is currently unavailable.", 503)
+        msg = "Authentication service is temporarily unavailable." if service_base_url == USER_SERVICE_URL else "Backend service is currently unavailable."
+        raise APIException("SERVICE_UNAVAILABLE", msg, 503)
     except httpx.TimeoutException:
         logger.error(f"Timeout calling backend microservice at {target_url}")
-        raise APIException("GATEWAY_TIMEOUT", "Backend service timed out.", 504)
+        msg = "Authentication service timed out." if service_base_url == USER_SERVICE_URL else "Backend service timed out."
+        raise APIException("GATEWAY_TIMEOUT", msg, 504)
     except Exception as exc:
         logger.error(f"Error proxying request to {target_url}: {str(exc)}")
-        raise APIException("BAD_GATEWAY", "Error communicating with upstream service.", 502)
+        msg = "Authentication service is temporarily unavailable." if service_base_url == USER_SERVICE_URL else "Error communicating with upstream service."
+        raise APIException("BAD_GATEWAY", msg, 502)
 
 # ==================== ROUTES & AGGREGATION ====================
 @app.get("/health")
