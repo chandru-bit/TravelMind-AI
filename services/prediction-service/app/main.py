@@ -21,7 +21,10 @@ from fastapi.exceptions import RequestValidationError
 
 logger = get_logger("prediction-service")
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    logger.warning(f"Could not initialize DB tables at startup: {exc}")
 
 app = FastAPI(title="TravelMind AI - Prediction Service", version="1.0.0")
 
