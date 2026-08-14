@@ -141,7 +141,7 @@ export const DashboardPage = () => {
                   <RecommendationCard
                     key={i}
                     recommendation={rec}
-                    onSelect={() => navigate('/plan')}
+                    onSelect={(item) => navigate('/plan', { state: { destination: item.destination || item.name, budget: item.estimated_cost || item.avg_cost } })}
                   />
                 ))}
               </div>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/client';
 import { Compass, Calendar, MapPin, DollarSign, Users, Sparkles, ArrowRight, CheckCircle2, Plane, Hotel, Ticket } from 'lucide-react';
 import { ItineraryTimeline } from '../components/ItineraryTimeline';
@@ -7,17 +7,27 @@ import { BudgetCard } from '../components/BudgetCard';
 
 export const PlanTripPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [source, setSource] = useState('Mumbai');
-  const [destination, setDestination] = useState('Goa');
+  const [destination, setDestination] = useState(location.state?.destination || 'Goa');
   const [startDate, setStartDate] = useState('2026-09-10');
   const [endDate, setEndDate] = useState('2026-09-14');
-  const [budget, setBudget] = useState(30000);
+  const [budget, setBudget] = useState(location.state?.budget || 30000);
   const [travelers, setTravelers] = useState(2);
   const [travelStyle, setTravelStyle] = useState('Balanced');
   const [interests, setInterests] = useState(['Beach', 'Adventure']);
   const [loading, setLoading] = useState(false);
   const [createdTrip, setCreatedTrip] = useState(null);
   const [itinerary, setItinerary] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.destination) {
+      setDestination(location.state.destination);
+    }
+    if (location.state?.budget) {
+      setBudget(location.state.budget);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
