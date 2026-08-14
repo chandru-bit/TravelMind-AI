@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../api/client';
-import { Compass, Calendar, MapPin, DollarSign, Users, Sparkles, ArrowRight, CheckCircle2, Plane, Hotel, Ticket } from 'lucide-react';
+import api, { billingApi } from '../api/client';
+import { Compass, Calendar, MapPin, DollarSign, Users, Sparkles, ArrowRight, CheckCircle2, Plane, Hotel, Ticket, FileText, Download, CreditCard } from 'lucide-react';
 import { ItineraryTimeline } from '../components/ItineraryTimeline';
 import { BudgetCard } from '../components/BudgetCard';
 
@@ -19,6 +19,22 @@ export const PlanTripPage = () => {
   const [loading, setLoading] = useState(false);
   const [createdTrip, setCreatedTrip] = useState(null);
   const [itinerary, setItinerary] = useState(null);
+
+  const handleDownloadInvoice = async (tripId) => {
+    try {
+      const res = await billingApi.downloadInvoicePdf(tripId);
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${tripId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Download failed:", err);
+      navigate(`/billing/booking/${tripId}`);
+    }
+  };
 
   useEffect(() => {
     if (location.state?.destination) {
@@ -223,20 +239,40 @@ export const PlanTripPage = () => {
                     <span className="text-xs font-extrabold text-cyan-400">₹4,200</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <Hotel className="w-4 h-4 text-indigo-400" />
-                      <div>
-                        <div className="text-xs font-bold text-white">Grand Resort & Spa</div>
-                        <div className="text-[10px] text-gray-400">4 Star • Ocean View</div>
+                  <div className="p-3.5 rounded-xl bg-gray-900 border border-gray-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Hotel className="w-4 h-4 text-indigo-400" />
+                        <div>
+                          <div className="text-xs font-bold text-white">Grand Resort & Spa</div>
+                          <div className="text-[10px] text-gray-400">4 Star • Ocean View • Deluxe Room</div>
+                        </div>
                       </div>
+                      <span className="text-xs font-extrabold text-indigo-400">₹3,500/night</span>
                     </div>
-                    <span className="text-xs font-extrabold text-indigo-400">₹3,500/night</span>
+
+                    {/* Room Booking & Invoice Actions */}
+                    <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => navigate(`/billing/booking/${createdTrip.id}`)}
+                        className="flex-1 py-2 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> View Bill & Pay
+                      </button>
+
+                      <button
+                        onClick={() => handleDownloadInvoice(createdTrip.id)}
+                        className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700"
+                        title="Download PDF Invoice"
+                      >
+                        <Download className="w-3.5 h-3.5 text-cyan-400" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="text-[10px] text-gray-400 text-center italic border-t border-gray-800 pt-2">
-                  Demo booking integration — Payments simulated.
+                  Demo room booking integration — Click "View Bill & Pay" to test invoices.
                 </div>
               </div>
             </div>
