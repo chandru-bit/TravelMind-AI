@@ -69,6 +69,8 @@ api.interceptors.response.use(
         errorMessage = 'Authentication service is temporarily unavailable.';
       } else if (status === 503) {
         errorMessage = 'Authentication service is currently unavailable.';
+      } else if (status === 405) {
+        errorMessage = 'Method Not Allowed (405). Please verify API Gateway backend configuration or VITE_API_BASE_URL.';
       } else if (status >= 500) {
         errorMessage = 'TravelMind AI encountered a server error. Please try again.';
       }
